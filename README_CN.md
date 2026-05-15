@@ -10,14 +10,13 @@
 ├── single_route/evaluate.py           # 单路线规划评估（Benchmark 1）
 ├── personalized/evaluate.py           # 个性化偏好评估（Benchmark 2）
 ├── diversity/evaluate.py              # 路线多样性评估（Benchmark 3）
-├── general_llm/evaluate.py            # 通用大模型评估
+├── general_llm/evaluate.py            # 通用大模型评估（依赖远程 route eval 接口）
 └── data/
-    ├── station_info.csv               # 站点坐标、名称、邻接关系（~12万条）
-    ├── line_info.csv                  # 线路信息，含站点列表（~1.4万条）
+    ├── station_info.csv               # 站点坐标、邻接关系（当前仓库内置）
     ├── benchmark1_single_route_example.csv    # 单路线示例数据
     ├── benchmark2_personalized_example.csv    # 个性化偏好示例数据
     ├── benchmark3_diversity_example.csv       # 多样性示例数据
-    └── general_llm_example.csv              # 通用大模型示例数据
+    └── general_llm_example.csv               # 通用大模型示例数据
 ```
 
 ## 环境要求
@@ -48,19 +47,33 @@ python3 general_llm/evaluate.py
 - `--input_field`: 评估字段，对外使用时传 `generate_results`（模型输出）
 - `--sample_count`: 评估样本数（默认全部）
 
+`general_llm/evaluate.py` 额外支持：
+- `--api_url`: route eval 接口地址，默认读取环境变量 `TRANSIT_LM_API`，未设置时回退到 `http://transit-lm.amap.com`
+- `--batch_size`: 批量请求大小，默认 `50`
+
+如果需要显式指定接口地址，可这样运行：
+
+```bash
+python3 general_llm/evaluate.py \
+  --api_url http://transit-lm.amap.com \
+  --batch_size 50
+```
+
 个性化偏好额外评估第5轮：Preference Compliance（换乘次数、是否含地铁、预测时间等偏好约束）。
 
 多样性评估额外指标：
 - **Best-Match**：首条路线 IoU≠1 时，自动从 second/third 中寻找可达且 IoU=1 的替代
 - **Route Diversity (RD)**：mean(1 - IoU(L_i, L_j))，含接驳方式作为线路集合的一部分
 
-通用大模型使用 `station_name`（站点名称）而非 `stop_id`，评估字段固定为 `generate_results`。
+通用大模型评估字段固定为 `generate_results`。预测结果里的站点序列使用站点名称而非 `stop_id`，兼容以下两种写法：
+- `station_sequence`: 内容直接填中文站点名
+- `station_name`: 单独提供站点名称序列
 
 各场景输入差异：
 - Benchmark 1 / Benchmark 2：`sft_label` 和 `generate_results` 都是单路线 JSON
 - Benchmark 2：CSV 额外需要 `req_type`
 - Benchmark 3：`sft_label` 和 `generate_results` 都是多路线 JSON，通常包含 `first`、`second`、`third`
-- General-purpose LLM：站点序列按 `station_name` 匹配，而不是 `stop_id`
+- General-purpose LLM：label 仍沿用 `station_sequence` 字段，但内容应为站点名称；预测侧按站名匹配，而不是 `stop_id`
 
 ## 评估逻辑（漏斗式4轮）
 
@@ -143,18 +156,14 @@ Benchmark 2 额外需要：
 | 字段 | 说明 |
 |------|------|
 | `stop_id` | 站点ID |
-| `lat` | 纬度 |
-| `lng` | 经度 |
-| `station_name` | 站点名称 |
-| `next_stop_ids` | 相邻站点ID列表（JSON数组） |
+| `ad_code` | 城市/行政区编码 |
+| `coord_x` | 经度 |
+| `coord_y` | 纬度 |
+| `next_hop_stations` | 相邻站点ID列表（JSON数组） |
 
-### line_info.csv
-
-| 字段 | 说明 |
-|------|------|
-| `citycode` | 城市编码 |
-| `line_name` | 线路名称 |
-| `station_list` | 站点列表（JSON数组，含 station_name + stop_id） |
+说明：
+- `common.py` 会将 `coord_x/coord_y` 解析为经纬度，并把 `next_hop_stations` 转成内部使用的 `next_stop_ids`
+- `station_name` 列在当前仓库的 `station_info.csv` 中不是必填字段；若存在会被自动读取
 
 ## 输出说明
 

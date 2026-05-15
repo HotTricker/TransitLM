@@ -10,14 +10,13 @@ This system evaluates the output quality of route planning large models, support
 ├── single_route/evaluate.py           # Single-route planning evaluation (Benchmark 1)
 ├── personalized/evaluate.py           # Personalized preference evaluation (Benchmark 2)
 ├── diversity/evaluate.py              # Route diversity evaluation (Benchmark 3)
-├── general_llm/evaluate.py            # General-purpose LLM evaluation
+├── general_llm/evaluate.py            # General-purpose LLM evaluation (uses a remote route-eval API)
 └── data/
-    ├── station_info.csv               # Station coordinates, names, adjacency relations (~120k records)
-    ├── line_info.csv                  # Line info with station lists (~14k records)
+    ├── station_info.csv               # Station coordinates and adjacency relations (bundled in this repo)
     ├── benchmark1_single_route_example.csv    # Single-route example data
     ├── benchmark2_personalized_example.csv    # Personalized preference example data
     ├── benchmark3_diversity_example.csv       # Diversity example data
-    └── general_llm_example.csv              # General-purpose LLM example data
+    └── general_llm_example.csv               # General-purpose LLM example data
 ```
 
 ## Requirements
@@ -48,19 +47,33 @@ Parameters:
 - `--input_field`: Evaluation field, use `generate_results` for external model output evaluation
 - `--sample_count`: Number of samples to evaluate (default: all)
 
+`general_llm/evaluate.py` additionally supports:
+- `--api_url`: route-eval endpoint; defaults to `TRANSIT_LM_API`, or falls back to `http://transit-lm.amap.com`
+- `--batch_size`: batch request size (default: `50`)
+
+Example with an explicit API endpoint:
+
+```bash
+python3 general_llm/evaluate.py \
+  --api_url http://transit-lm.amap.com \
+  --batch_size 50
+```
+
 Personalized preference adds Round 5: Preference Compliance (transfer count, subway inclusion, predicted time constraints, etc.).
 
 Diversity evaluation adds extra metrics:
 - **Best-Match**: When the first route IoU != 1, automatically search second/third for a reachable alternative with IoU = 1
 - **Route Diversity (RD)**: mean(1 - IoU(L_i, L_j)), with transfer mode included as part of the line set
 
-General-purpose LLM uses `station_name` instead of `stop_id`, and the evaluation field is fixed to `generate_results`.
+For general-purpose LLM evaluation, the evaluation field is fixed to `generate_results`. The predicted route sequence should use station names rather than `stop_id`, in either of these forms:
+- `station_sequence`: directly contains station names
+- `station_name`: an explicit station-name sequence field
 
 Scenario-specific input notes:
 - Benchmark 1 / Benchmark 2: `sft_label` and `generate_results` are single-route JSON objects
 - Benchmark 2: CSV must additionally contain `req_type`
 - Benchmark 3: `sft_label` and `generate_results` are multi-route JSON objects, typically containing `first`, `second`, and `third`
-- General-purpose LLM: route sequences are matched by `station_name` rather than `stop_id`
+- General-purpose LLM: labels still use `station_sequence`, but the sequence content should be station names; prediction-side matching is by station name rather than `stop_id`
 
 ## Evaluation Logic (Funnel-Style 4 Rounds)
 
@@ -143,18 +156,14 @@ For general-purpose LLM evaluation, the route JSON keeps the same metric fields,
 | Field | Description |
 |-------|-------------|
 | `stop_id` | Station ID |
-| `lat` | Latitude |
-| `lng` | Longitude |
-| `station_name` | Station name |
-| `next_stop_ids` | Adjacent station ID list (JSON array) |
+| `ad_code` | City / district code |
+| `coord_x` | Longitude |
+| `coord_y` | Latitude |
+| `next_hop_stations` | Adjacent station ID list (JSON array) |
 
-### line_info.csv
-
-| Field | Description |
-|-------|-------------|
-| `citycode` | City code |
-| `line_name` | Line name |
-| `station_list` | Station list (JSON array, containing station_name + stop_id) |
+Notes:
+- `common.py` converts `coord_x/coord_y` into internal latitude/longitude values and maps `next_hop_stations` to `next_stop_ids`
+- `station_name` is optional in the current bundled `station_info.csv`; if present, it is loaded automatically
 
 ## Output Summary
 

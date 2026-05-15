@@ -24,7 +24,11 @@ def _data_path(filename):
 
 
 def load_station_info(csv_path=None):
-    """从CSV加载站点综合信息 stop_id -> {lat, lng, station_name, next_stop_ids}"""
+    """Load station info from CSV: stop_id -> {lat, lng, station_name, next_stop_ids}.
+
+    The CSV schema is:
+        stop_id, ad_code, coord_x (lng), coord_y (lat), next_hop_stations
+    """
     if csv_path is None:
         csv_path = _data_path('station_info.csv')
     info = {}
@@ -32,10 +36,10 @@ def load_station_info(csv_path=None):
         reader = csv.DictReader(f)
         for row in reader:
             sid = row['stop_id']
-            lat = float(row['lat']) if row['lat'] else 0.0
-            lng = float(row['lng']) if row['lng'] else 0.0
+            lng = float(row['coord_x']) if row.get('coord_x') else 0.0
+            lat = float(row['coord_y']) if row.get('coord_y') else 0.0
             name = row.get('station_name', '')
-            nh = json.loads(row['next_stop_ids']) if row.get('next_stop_ids') else []
+            nh = json.loads(row['next_hop_stations']) if row.get('next_hop_stations') else []
             if sid not in nh:
                 nh.append(sid)
             info[sid] = {'lat': lat, 'lng': lng, 'station_name': name, 'next_stop_ids': nh}
@@ -813,9 +817,40 @@ def evaluate_general_llm_sample(data, label_data, line_info, next_hop, station_c
         distance_plausibility_reason = "Distance Plausibility 通过"
 
     label_station_names = label_data.get('station_name', []) or []
+    label_lines_raw = label_data.get('line_sequence', []) or []
+
+    # 若 label 给出的是“完整经停序列”（长度 > 2 * 线路数），
+    # 按 【换乘】 分段后每段只保留首尾，
+    # 使其与 result.station_name（2N）语义对齐，保证 IoU 天花板仍为 1.0。
+    if (
+        label_station_names
+        and label_lines_raw
+        and len(label_station_names) > 2 * len(label_lines_raw)
+    ):
+        segments = []
+        cur = []
+        for s in label_station_names:
+            if not s or not str(s).strip():
+                continue
+            if str(s).strip() == '【换乘】':
+                if cur:
+                    segments.append(cur)
+                    cur = []
+                continue
+            cur.append(s)
+        if cur:
+            segments.append(cur)
+        trimmed = []
+        for seg in segments:
+            if not seg:
+                continue
+            trimmed.append(seg[0])
+            if len(seg) > 1:
+                trimmed.append(seg[-1])
+        label_station_names = trimmed
+
     if not label_station_names and station_names_map:
         seq = label_data.get('station_sequence', []) or []
-        label_lines_raw = label_data.get('line_sequence', []) or []
         label_station_names = []
         pos = 0
         for line_name in label_lines_raw:
