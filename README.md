@@ -69,6 +69,10 @@ For general-purpose LLM evaluation, the evaluation field is fixed to `generate_r
 - `station_sequence`: directly contains station names
 - `station_name`: an explicit station-name sequence field
 
+Notes:
+- In the general-purpose LLM setting, the remote route-eval service only cares about boarding/alighting stations plus normalized transfer structure; a full stop-by-stop sequence is not required
+- If a full station sequence is provided, the evaluation script still accepts it and normalizes it before sending the remote evaluation request
+
 Scenario-specific input notes:
 - Benchmark 1 / Benchmark 2: `sft_label` and `generate_results` are single-route JSON objects
 - Benchmark 2: CSV must additionally contain `req_type`
@@ -150,6 +154,10 @@ Diversity benchmark (`benchmark3`) expects a multi-route JSON object:
 ```
 
 For general-purpose LLM evaluation, the route JSON keeps the same metric fields, but `station_sequence` should contain station names instead of `stop_id`.
+
+Additional note:
+- The remote evaluation stage only uses boarding/alighting stations and transfer structure for reachability and grounding checks
+- Even if the input contains the full station sequence, the script will handle it and extract the subset needed by the remote evaluator
 
 ### station_info.csv
 

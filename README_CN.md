@@ -69,6 +69,10 @@ python3 general_llm/evaluate.py \
 - `station_sequence`: 内容直接填中文站点名
 - `station_name`: 单独提供站点名称序列
 
+说明：
+- 远程 route eval 在通用大模型场景下只关心上下车站点（即归一化后的首末站/换乘站信息），不要求必须提供全量途经站
+- 如果输入里提供了完整站点序列，评估脚本也会兼容处理，并在调用远程评估前自动归一化
+
 各场景输入差异：
 - Benchmark 1 / Benchmark 2：`sft_label` 和 `generate_results` 都是单路线 JSON
 - Benchmark 2：CSV 额外需要 `req_type`
@@ -150,6 +154,10 @@ Benchmark 2 额外需要：
 ```
 
 通用大模型评估沿用相同的距离/时间/票价字段，但 `station_sequence` 中应填写站点名称，而不是 `stop_id`。
+
+补充说明：
+- 远程评估阶段只使用上下车站点与换乘结构来做可达性和 grounding 判断
+- 即使提供了完整站点序列，脚本也会自动兼容，并提取远程评估真正需要的站点信息
 
 ### station_info.csv
 
