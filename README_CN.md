@@ -1,57 +1,80 @@
-# 路线规划模型评估系统
+# TransitLM 路线评估
 
-本系统用于评估路线规划大模型的输出质量，支持四种评估场景：单路线规划、个性化偏好、路线多样性和通用大模型。评估逻辑采用漏斗式多轮检查，从可达性到准确性逐层筛选。
+本仓库为论文《TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation》的配套评测代码，基于统一的漏斗式评估流程，对路线规划模型输出质量进行系统化评估。
 
-## 目录结构
+本仓库覆盖以下四类典型场景：
 
-```
-.
-├── common.py                          # 公共评估模块（Haversine距离、IoU计算、专家评分等）
-├── single_route/evaluate.py           # 单路线规划评估（Benchmark 1）
-├── personalized/evaluate.py           # 个性化偏好评估（Benchmark 2）
-├── diversity/evaluate.py              # 路线多样性评估（Benchmark 3）
-├── general_llm/evaluate.py            # 通用大模型评估（依赖远程 route eval 接口）
-└── data/
-    ├── station_info.csv               # 站点坐标、邻接关系（当前仓库内置）
-    ├── benchmark1_single_route_example.csv    # 单路线示例数据
-    ├── benchmark2_personalized_example.csv    # 个性化偏好示例数据
-    ├── benchmark3_diversity_example.csv       # 多样性示例数据
-    └── general_llm_example.csv               # 通用大模型示例数据
-```
+- 单路线规划
+- 个性化偏好路线规划
+- 多路线多样性评估
+- 通用大模型路线评估（调用远程 route-eval API）
 
-## 环境要求
+本仓库并非仅输出单一总分，而是将评估过程拆解为多个层次，包括路线可达性、站点 grounding、线路结构一致性，以及距离、时间和票价的估计合理性。
+
+## 论文与资源
+
+- 论文：[`TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation`](https://huggingface.co/papers/2605.22355)
+- 数据集：[`GD-ML/TransitLM`](https://huggingface.co/datasets/GD-ML/TransitLM)
+- 本仓库：TransitLM 论文对应的 evaluation code，用于复现实验中的评测流程与指标
+
+## 项目定位
+
+- **场景覆盖完整**：同一套评估框架可同时支持 Benchmark 1、2、3 以及通用大模型场景
+- **评估结果具备可解释性**：除总体结果外，还提供可达性、grounding、结构匹配和预估准确性等分层信号
+- **部署成本较低**：仅依赖 Python 标准库
+- **验证流程便捷**：仓库内置示例 CSV，可直接用于快速验证
+
+## 快速开始
+
+环境要求：
 
 - Python 3.8+
-- 无需额外依赖（仅使用 Python 标准库）
+- 无额外依赖，只用标准库
 
-## 使用方法
-
-各场景均提供 `*_example.csv`（10条样本），可用于快速验证评估流程。四个脚本的默认 `--input` 已指向对应示例文件，因此下面命令可直接运行：
+可直接运行内置样例：
 
 ```bash
-# 单路线规划评估（Benchmark 1）
 python3 single_route/evaluate.py --input_field generate_results
-
-# 个性化偏好评估（Benchmark 2）
 python3 personalized/evaluate.py --input_field generate_results
-
-# 路线多样性评估（Benchmark 3）
 python3 diversity/evaluate.py --input_field generate_results
-
-# 通用大模型评估
 python3 general_llm/evaluate.py
 ```
 
-参数说明：
-- `--input`: 输入 CSV 文件路径
-- `--input_field`: 评估字段，对外使用时传 `generate_results`（模型输出）
-- `--sample_count`: 评估样本数（默认全部）
+四个脚本的默认 `--input` 均已指向对应示例 CSV，可直接执行。
+
+## 支持的评估场景
+
+| 场景 | 脚本 | 额外能力 |
+|---|---|---|
+| 单路线规划 | `single_route/evaluate.py` | 标准 4 轮漏斗评估 |
+| 个性化偏好 | `personalized/evaluate.py` | 额外第 5 轮：Preference Compliance |
+| 路线多样性 | `diversity/evaluate.py` | 额外输出 Best-Match 和 Route Diversity |
+| 通用大模型 | `general_llm/evaluate.py` | 通过远程 route-eval API 评估 |
+
+### 个性化偏好
+
+第 5 轮用于检验预测结果是否满足用户偏好约束，例如：
+
+- 少换乘
+- 不坐地铁
+- 地铁优先
+- 时间更短
+
+### 路线多样性
+
+附加指标包括：
+
+- **Best-Match**：当第一条路线未实现精确命中时，继续在 `second`、`third` 中检索可达且精确匹配的替代路线
+- **Route Diversity (RD)**：`mean(1 - IoU(L_i, L_j))`，并将接驳方式纳入路线差异计算
+
+### 通用大模型评估
 
 `general_llm/evaluate.py` 额外支持：
-- `--api_url`: route eval 接口地址，默认读取环境变量 `TRANSIT_LM_API`，未设置时回退到 `http://transit-lm.amap.com`
-- `--batch_size`: 批量请求大小，默认 `50`
 
-如果需要显式指定接口地址，可这样运行：
+- `--api_url`：默认先读 `TRANSIT_LM_API`，否则回退到 `http://transit-lm.amap.com`
+- `--batch_size`：默认 `50`
+
+示例命令如下：
 
 ```bash
 python3 general_llm/evaluate.py \
@@ -59,57 +82,60 @@ python3 general_llm/evaluate.py \
   --batch_size 50
 ```
 
-个性化偏好额外评估第5轮：Preference Compliance（换乘次数、是否含地铁、预测时间等偏好约束）。
+在该场景中，评估字段固定为 `generate_results`，站点序列建议使用站点名称而非 `stop_id`。
 
-多样性评估额外指标：
-- **Best-Match**：首条路线 IoU≠1 时，自动从 second/third 中寻找可达且 IoU=1 的替代
-- **Route Diversity (RD)**：mean(1 - IoU(L_i, L_j))，含接驳方式作为线路集合的一部分
+## 评估流程
 
-通用大模型评估字段固定为 `generate_results`。预测结果里的站点序列使用站点名称而非 `stop_id`，兼容以下两种写法：
-- `station_sequence`: 内容直接填中文站点名
-- `station_name`: 单独提供站点名称序列
+所有场景共享以下 4 轮核心检查：
 
-说明：
-- 远程 route eval 在通用大模型场景下只关心上下车站点（即归一化后的首末站/换乘站信息），不要求必须提供全量途经站
-- 如果输入里提供了完整站点序列，评估脚本也会兼容处理，并在调用远程评估前自动归一化
+| 轮次 | 检查项 | 作用 |
+|---|---|---|
+| 1 | 可达性 | 检验相邻站点是否能够在 `next_stop_ids` 中连通 |
+| 2 | Station Grounding & Distance Plausibility | 检验起终点 grounding 是否合理，以及接驳距离是否可信 |
+| 3 | 线路 IoU + 站点 IoU + 专家评分 + 接驳方式一致性 | 检验预测结构与标注结构是否一致 |
+| 4 | 预估准确性 | 检验距离、时间、票价及接驳距离是否处于容忍范围内 |
 
-各场景输入差异：
-- Benchmark 1 / Benchmark 2：`sft_label` 和 `generate_results` 都是单路线 JSON
-- Benchmark 2：CSV 额外需要 `req_type`
-- Benchmark 3：`sft_label` 和 `generate_results` 都是多路线 JSON，通常包含 `first`、`second`、`third`
-- General-purpose LLM：label 仍沿用 `station_sequence` 字段，但内容应为站点名称；预测侧按站名匹配，而不是 `stop_id`
+第 2 轮接驳阈值：
 
-## 评估逻辑（漏斗式4轮）
+- 步行：3 km
+- 骑行：5 km
+- 打车：10 km
 
-所有场景共享以下4轮核心检查：
+第 4 轮容差：
 
-| 轮次 | 检查项 | 说明 |
-|------|--------|------|
-| 第1轮 | 可达性 | 检查相邻站点在 `next_stop_ids` 中连通 |
-| 第2轮 | Station Grounding & Distance Plausibility | 起终点到首末站直线距离按接驳方式设阈值（步行3km/骑行5km/打车10km）；接驳距离不能短于直线距离-0.5km，不能超过3倍+0.5km |
-| 第3轮 | 线路IoU + 站点IoU + 专家评分 + 接驳方式一致性 | 站点IoU过滤【换乘】节点；专家评分公式：S = T_sec/300 + (N_lines + cycling_segments) + fare |
-| 第4轮 | 预估准确性 | 距离±10%或0.5km、时间±10%或5min、费用±10%或1元；接驳距离±0.5km |
+- 距离：`+-10%` 或 `0.5 km`
+- 时间：`+-10%` 或 `5 min`
+- 票价：`+-10%` 或 `1 元`
+- 接驳距离：`+-0.5 km`
 
-## 数据文件格式
+第 3 轮专家评分公式：
 
-### 评估数据 CSV
+```text
+S = T_sec / 300 + (N_lines + cycling_segments) + fare
+```
+
+## 输入数据约定
+
+### CSV 字段
+
+通用字段如下：
 
 | 字段 | 说明 |
-|------|------|
+|---|---|
 | `index_id` | 样本唯一标识 |
-| `sft_prompt` | 输入提示（JSON字符串，含 query/start/end/city） |
-| `sft_label` | 标注答案（JSON字符串） |
-| `generate_results` | 模型输出（JSON字符串） |
+| `sft_prompt` | 输入 JSON 字符串，通常包含 query / start / end / city |
+| `sft_label` | 标注答案 JSON |
+| `generate_results` | 模型输出 JSON |
 
 Benchmark 2 额外需要：
 
 | 字段 | 说明 |
-|------|------|
-| `req_type` | 偏好类型。目前内置值包括：`2`（换乘少）、`5`（不坐地铁）、`7`（地铁优先）、`8`（时间短） |
+|---|---|
+| `req_type` | 偏好类型，例如 `2`、`5`、`7`、`8` |
 
 ### 路线 JSON 结构
 
-单路线任务（`benchmark1`、`benchmark2`）中的 `sft_label` / `generate_results` 应为如下 JSON 对象：
+单路线任务采用如下 JSON 对象：
 
 ```json
 {
@@ -125,7 +151,7 @@ Benchmark 2 额外需要：
 }
 ```
 
-多样性任务（`benchmark3`）中的 `sft_label` / `generate_results` 应为多路线 JSON：
+多样性任务采用多路线对象：
 
 ```json
 {
@@ -153,34 +179,42 @@ Benchmark 2 额外需要：
 }
 ```
 
-通用大模型评估沿用相同的距离/时间/票价字段，但 `station_sequence` 中应填写站点名称，而不是 `stop_id`。
+在通用大模型场景下：
 
-补充说明：
-- 远程评估阶段只使用上下车站点与换乘结构来做可达性和 grounding 判断
-- 即使提供了完整站点序列，脚本也会自动兼容，并提取远程评估真正需要的站点信息
+- `label` 侧仍沿用 `station_sequence`
+- `prediction` 侧建议填写站点名称
+- `station_sequence` 与 `station_name` 两种写法均可兼容
+- 远程评估阶段主要关注上下车站点及归一化后的换乘结构
 
-### station_info.csv
+## 输出结果关注重点
 
-| 字段 | 说明 |
-|------|------|
-| `stop_id` | 站点ID |
-| `ad_code` | 城市/行政区编码 |
-| `coord_x` | 经度 |
-| `coord_y` | 纬度 |
-| `next_hop_stations` | 相邻站点ID列表（JSON数组） |
+脚本会直接在终端输出分轮统计结果。通常建议重点关注以下指标：
 
-说明：
-- `common.py` 会将 `coord_x/coord_y` 解析为经纬度，并把 `next_hop_stations` 转成内部使用的 `next_stop_ids`
-- `station_name` 列在当前仓库的 `station_info.csv` 中不是必填字段；若存在会被自动读取
+- 可达性通过率
+- `station_iou == 1` 的样本数
+- 整体准确率
+- Benchmark 2 的偏好命中情况
+- Benchmark 3 的 Best-Match 命中情况与 Route Diversity
 
-## 输出说明
+## 仓库结构
 
-脚本会直接在终端输出分轮统计结果：
-- 第1轮：可达性
-- 第2轮：Station Grounding 与 Distance Plausibility
-- 第3轮：线路 IoU、站点 IoU、专家评分、接驳方式一致性
-- 第4轮：距离 / 时间 / 费用 / 接驳准确性
-- Benchmark 2 额外输出第5轮 Preference Compliance
-- Benchmark 3 额外输出 Best-Match 统计与 Route Diversity
+```text
+.
+├── common.py
+├── single_route/evaluate.py
+├── personalized/evaluate.py
+├── diversity/evaluate.py
+├── general_llm/evaluate.py
+└── data/
+    ├── station_info.csv
+    ├── benchmark1_single_route_example.csv
+    ├── benchmark2_personalized_example.csv
+    ├── benchmark3_diversity_example.csv
+    └── general_llm_example.csv
+```
 
-快速看结果时，通常最值得关注的是：可达性通过率、`station_iou == 1` 的样本数、整体准确率、Benchmark 2 的 Preference Compliance，以及 Benchmark 3 的 Route Diversity 和 Best-Match 命中分布。
+## 说明
+
+- `common.py` 会自动将 `coord_x` / `coord_y` 解析为内部经纬度表示
+- `next_hop_stations` 会被转换为内部使用的 `next_stop_ids`
+- 若 `station_info.csv` 中存在 `station_name` 列，脚本会自动读取
