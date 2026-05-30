@@ -13,7 +13,7 @@
 
 ## 论文与资源
 
-- 论文：[`TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation`](https://huggingface.co/papers/2605.22355)
+- 论文：[`TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation`](https://huggingface.co/papers/2605.22355)，[arXiv:2605.22355](https://arxiv.org/abs/2605.22355)
 - Hugging Face：[`GD-ML/TransitLM`](https://huggingface.co/datasets/GD-ML/TransitLM)
 - 魔搭：[`GD-ML/TransitLM`](https://modelscope.cn/datasets/GD-ML/TransitLM)
 - 本仓库：TransitLM 论文对应的 evaluation code，用于复现实验中的评测流程与指标
