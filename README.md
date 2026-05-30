@@ -13,7 +13,8 @@ Rather than producing only a single aggregate score, the evaluator decomposes qu
 
 ## Paper And Resources
 
-- Paper: [`TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation`](https://huggingface.co/papers/2605.22355), [arXiv:2605.22355](https://arxiv.org/abs/2605.22355)
+- arXiv: [`TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation`](https://arxiv.org/abs/2605.22355)
+- Hugging Face Paper: [`TransitLM: A Large-Scale Dataset and Benchmark for Map-Free Transit Route Generation`](https://huggingface.co/papers/2605.22355)
 - Hugging Face: [`GD-ML/TransitLM`](https://huggingface.co/datasets/GD-ML/TransitLM)
 - ModelScope: [`GD-ML/TransitLM`](https://modelscope.cn/datasets/GD-ML/TransitLM)
 - This repository: the evaluation code accompanying the TransitLM paper, intended for reproducing the evaluation pipeline and metrics used in the benchmark
